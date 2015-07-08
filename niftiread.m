@@ -1,13 +1,16 @@
-function nii = niihdrread(filename)
+function nii = niftiread(varargin)
 % Read a NIFTI-1 or NIFTI-2 file.
 % Currently no extensions are supported (that is, no CIFTI).
-% Must be a single .nii file (not .hdr/.img pair).
+% Must be a single .nii file (no .hdr/.img pair).
 % Must be uncompressed.
 %
-% nii = niihdrread(filename)
+% nii = niihdrread(filename,tempdir)
 %
 % - filename   : File to be read.
-% - nii        : Struct containing the content of the file.
+% - tempdir    : Optional. For gzipped files, this is
+%                the directory to uncompress.
+%                Default is '/tmp/nifti'
+% - nii        : Struct with the content of the file.
 %
 % _____________________________________
 % Anderson M. Winkler
@@ -15,6 +18,51 @@ function nii = niihdrread(filename)
 % Nov/2012 (first version)
 % Jul/2015 (this version)
 % http://brainder.org
+
+% Parse inputs:
+narginchk(1,2);
+filename = varargin{1};
+if nargin == 2,
+    tempdir = varargin{2};
+else
+    tempdir = '/tmp';
+end
+
+% Deal with extensions:
+[fpth, fnam, fext] = fileparts(filename);
+todelete = [];
+if strcmpi(fext, '.gz'),
+    
+    % If gzipped, uncompress to a temp directory. This will
+    % be the case for .nii.gz and the less common .img.gz
+    try
+        gunzip(filename, tempdir);
+    catch
+        error([ ...
+            'Tried to uncompress input file but failed. Consider uncompressing\n' ...
+            'manually or supplying a temporary directory with writing permitted.\n' ...
+            '- temp (failed): %s\n', ...
+            '- file (failed): %s'], tempdir, filename);
+    end
+    
+    % Handle the file pairs
+    [~, fnam2, ext2] = fileparts(fnam);
+    if     strcmpi(ext2, 'img'),
+        copyfile(fullfile(fpth, strcat(fnam2, '.hdr')), tempdir);
+        filename = strcat(tempdir, strcat(fnam2, '.hdr'));
+        todelete = {fullfile(tempdir, fnam), filename};
+    elseif strcmpi(ext2, 'nii'),
+        filename = strcat(tempdir, fnam);
+        todelete = filename;
+    end
+    
+elseif  strcmpi(fext, 'img'),
+    
+    % If the input is .img, replace for the .hdr. There's no need
+    % to check if the file exists as it'll give a standard error message
+    % if it fails anyway.
+    filename = fullfile(fpth, strcat(fnam, '.hdr'));
+end
 
 % Read the first 4 bytes to determine endianness and version:
 fid = fopen(filename, 'r', 'l');
@@ -86,14 +134,14 @@ if niftiversion == 1,
     nii.hdr.srow_y         = fread(fid, 4, 'float32=>float32')';
     nii.hdr.srow_z         = fread(fid, 4, 'float32=>float32')';
     nii.hdr.intent_name    = fread(fid, 16,'int8=>char'      )';
-    nii.hdr.magic          = fread(fid, 4, 'int8=>int8'      )';
+    nii.hdr.magic          = fread(fid, 4, 'int8=>char'      )';
     nii.hdr.extension      = fread(fid, 4, 'int8=>int8'      );
     
 elseif niftiversion == 2,
     
     % NIFTI-2
     nii.hdr.sizeof_hdr     = fread(fid, 1, 'int32=>int32'    );
-    nii.hdr.magic          = fread(fid, 8, 'int8=>int8'      )';
+    nii.hdr.magic          = fread(fid, 8, 'int8=>char'      )';
     nii.hdr.datatype       = fread(fid, 1, 'int16=>int16'    );
     nii.hdr.bitpix         = fread(fid, 1, 'int16=>int16'    );
     nii.hdr.dim            = fread(fid, 8, 'int64=>double'   );
@@ -205,25 +253,54 @@ switch nii.hdr.datatype,
 end
 
 % Read the data array & close the file:
-tmp = fread(fid, prod(nii.hdr.dim(2:end))*cnt, dtype);
-fclose(fid);
+if      strcmp(nii.hdr.magic,['n+1' char(0)]) || ...
+        strcmp(nii.hdr.magic,['n+2' char([0 13 10 26 10])]),
+    
+    % Load as a single .nii and close the file:
+    tmp = fread(fid, prod(nii.hdr.dim(2:end))*cnt, dtype);
+    fclose(fid);
+    
+elseif  strcmp(nii.hdr.magic,['ni1' char(0)]) || ...
+        strcmp(nii.hdr.magic,['ni2' char([0 13 10 26 10])]),
+    
+    % Close the .hdr, open the .img, and close it.
+    fclose(fid);
+    
+    fid = fopen(strcat(filename(1:end-4), '.img'), 'r', endianness);
+    tmp = fread(fid, prod(nii.hdr.dim(2:end))*cnt, dtype);
+    fclose(fid);
+    
+else
+    int8(nii.hdr.magic)
+    error('Unknown magic string: %s\n', nii.hdr.magic);
+end
 
 % Reorganise in the memory:
 if cnt == 1,
+    
     % Most common case, single volume:
-    nii.img = reshape(tmp,nii.hdr.dim(2:end)');
+    nii.img = reshape(tmp, nii.hdr.dim(2:end)');
+
 else
     tmp = reshape(tmp',[cnt prod(nii.hdr.dim(2:end))]);
     if nii.hdr.datatype == 32,
+        
         % Complex (two volumes, merged as complex).
         nii.img = complex(...
             reshape(tmp(1,:),nii.hdr.dim(2:end)'),...
             reshape(tmp(2,:),nii.hdr.dim(2:end)'));
+        
     elseif any(nii.hdr.datatype == [128 1792 2304]),
+        
         % Other cases, kept separate as a cell array.
         nii.img = cell(cnt,1);
         for c = 1:cnt,
             nii.img{c} = reshape(tmp(c,:), nii.hdr.dim(2:end)');
         end
     end
+end
+
+% Delete the temporary files, if any:
+if ~ isempty(todelete),
+    delete(todelete{:});
 end
