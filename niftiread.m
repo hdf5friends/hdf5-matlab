@@ -2,14 +2,13 @@ function nii = niftiread(varargin)
 % Read a NIFTI-1 or NIFTI-2 file.
 % Currently no extensions are supported (that is, no CIFTI).
 % Must be a single .nii file (no .hdr/.img pair).
-% Must be uncompressed.
 %
-% nii = niihdrread(filename,tempdir)
+% nii = niftiread(filename,tempdir)
 %
 % - filename   : File to be read.
 % - tempdir    : Optional. For gzipped files, this is
 %                the directory to uncompress.
-%                Default is '/tmp/nifti'
+%                Default is '/tmp'
 % - nii        : Struct with the content of the file.
 %
 % _____________________________________
@@ -36,6 +35,7 @@ if strcmpi(fext, '.gz'),
     % If gzipped, uncompress to a temp directory. This will
     % be the case for .nii.gz and the less common .img.gz
     try
+        mkdir(tempdir);
         gunzip(filename, tempdir);
     catch
         error([ ...
@@ -47,16 +47,16 @@ if strcmpi(fext, '.gz'),
     
     % Handle the file pairs
     [~, fnam2, ext2] = fileparts(fnam);
-    if     strcmpi(ext2, 'img'),
+    if     strcmpi(ext2, '.img'),
         copyfile(fullfile(fpth, strcat(fnam2, '.hdr')), tempdir);
         filename = strcat(tempdir, strcat(fnam2, '.hdr'));
         todelete = {fullfile(tempdir, fnam), filename};
-    elseif strcmpi(ext2, 'nii'),
-        filename = strcat(tempdir, fnam);
-        todelete = filename;
+    elseif strcmpi(ext2, '.nii'),
+        filename = fullfile(tempdir, fnam);
+        todelete{1} = filename;
     end
     
-elseif  strcmpi(fext, 'img'),
+elseif  strcmpi(fext, '.img'),
     
     % If the input is .img, replace for the .hdr. There's no need
     % to check if the file exists as it'll give a standard error message

@@ -1,15 +1,15 @@
 % Uncomment to test with NIFTI-1:
-niiname = 'MNI152_T1_2mm_brain.nii';
-hdfname = 'MNI152_T1_2mm_brain.h5';
+niiname = '../exfiles/MNI152_T1_2mm_brain.nii';
+hdfname = '../exfiles/MNI152_T1_2mm_brain.h5';
 
 % Uncomment to test with NIFTI-2:
-% niiname = 'MNI152_T1_1mm_nifti2.nii';
-% hdfname = 'MNI152_T1_1mm_nifti2.h5';
+% niiname = '../exfiles/MNI152_T1_1mm_nifti2.nii';
+% hdfname = '../exfiles/MNI152_T1_1mm_nifti2.h5';
 
 % Define subject index and volume index, such that the data
-% will be stored in: /subj%d/vol%d
-subj_idx = 1;
-vol_idx  = 1;
+% will be stored in: /id%d/vol%d
+id_idx  = 1;
+vol_idx = 1;
 
 % Read the NIFTI file
 % ------------------------------------------------------------------
@@ -29,13 +29,21 @@ nii = niftiread(niiname);
 file_id = H5F.create(hdfname, 'H5F_ACC_TRUNC', ...
     'H5P_DEFAULT', 'H5P_DEFAULT');
 
+% Create the group to store data for this subject:
+% ------------------------------------------------------------------
+% Default property lists, kept as default for now.
+% The group can be closed immediately, as its "id" won't be used again.
+id_id = H5G.create(file_id, sprintf('id%d', id_idx), ...
+    'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
+
 % Create the group to store volume-based data:
 % ------------------------------------------------------------------
 % Default property lists, kept as default for now.
 % The group can be closed immediately, as its "id" won't be used again.
-subj_id = H5G.create(file_id, sprintf('subj%d', subj_idx), ...
+vol_id = H5G.create(id_id, 'vol', ...
     'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
-H5G.close(subj_id);
+H5G.close(vol_id);
+H5G.close(id_id);
 
 % Define the dataspace for the volume:
 % ------------------------------------------------------------------
@@ -82,7 +90,7 @@ end
 % above. Then write the contents of the NIFTI to it. Like everything
 % else, each needs to be closed. The dataset proper, however, will
 % remain open for now to allow adding attributes.
-dset_id = H5D.create(file_id, sprintf('/subj%d/vol%d', subj_idx, vol_idx), ...
+dset_id = H5D.create(file_id, sprintf('/id%d/vol/vol%d', id_idx, vol_idx), ...
     dtype_id, dspace_id, 'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
 H5T.close(dtype_id);
 H5S.close(dspace_id);
