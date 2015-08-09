@@ -1,7 +1,6 @@
 function nii = niftiread(varargin)
 % Read a NIFTI-1 or NIFTI-2 file.
 % Currently no extensions are supported (that is, no CIFTI).
-% Must be a single .nii file (no .hdr/.img pair).
 %
 % nii = niftiread(filename,tempdir)
 %
@@ -257,6 +256,7 @@ if      strcmp(nii.hdr.magic,['n+1' char(0)]) || ...
         strcmp(nii.hdr.magic,['n+2' char([0 13 10 26 10])]),
     
     % Load as a single .nii and close the file:
+    fseek(fid, nii.hdr.vox_offset, 'bof');
     tmp = fread(fid, prod(nii.hdr.dim(2:end))*cnt, dtype);
     fclose(fid);
     
