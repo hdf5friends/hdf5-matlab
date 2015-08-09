@@ -41,28 +41,28 @@ hdf = giftiread(giiname);
 file_id = H5F.create(hdfname, 'H5F_ACC_TRUNC', ...
     'H5P_DEFAULT', 'H5P_DEFAULT');
 
-% Create the group to store data for this subject:
-% ------------------------------------------------------------------
-% Default property lists, kept as default for now.
-id_id = H5G.create(file_id, sprintf('id%d', id_idx), ...
-    'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
+% % Create the group to store data for this subject:
+% % ------------------------------------------------------------------
+% % Default property lists, kept as default for now.
+% id_id = H5G.create(file_id, sprintf('id%d', id_idx), ...
+%     'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
 
 % Loop over each dataarray in the HDF file:
 % ------------------------------------------------------------------
 for da = 1:numel(hdf),
     
-    % Create the appropriate group if it doesn't exist.
-    % --------------------------------------------------------------
-    if ~ H5L.exists(id_id, hdf{da}.dset_name, 'H5P_DEFAULT'),
-        grp_id   = H5G.create(id_id, hdf{da}.dset_name, ...
-            'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
-        dset_idx = 1;
-    else
-        grp_id   = H5G.open(id_id, hdf{da}.dset_name ,'H5P_DEFAULT');
-        info     = H5G.get_info(grp_id);
-        dset_idx = info.nlinks + 1;
-    end
-    H5G.close(grp_id);
+%     % Create the appropriate group if it doesn't exist.
+%     % --------------------------------------------------------------
+%     if ~ H5L.exists(id_id, hdf{da}.dset_name, 'H5P_DEFAULT'),
+%         grp_id   = H5G.create(id_id, hdf{da}.dset_name, ...
+%             'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
+%         dset_idx = 1;
+%     else
+%         grp_id   = H5G.open(id_id, hdf{da}.dset_name ,'H5P_DEFAULT');
+%         info     = H5G.get_info(grp_id);
+%         dset_idx = info.nlinks + 1;
+%     end
+%     H5G.close(grp_id);
     
     % Define the dataspace:
     % --------------------------------------------------------------
@@ -81,8 +81,10 @@ for da = 1:numel(hdf),
     % above. Then write the data contents to it. Like everything else,
     % each needs to be closed. The dataset proper, however, will
     % remain open for now to allow adding attributes.
-    dset_id = H5D.create(file_id, ...
-        sprintf('/id%d/%s/%d', id_idx, hdf{da}.dset_name, dset_idx), ...
+    % Currently, there is a risk that with weird GIFTI files can have
+    % multiple dataarrays with the same name without representing time
+    % series. This will need addressing soon.
+    dset_id = H5D.create(file_id, hdf{da}.dset_name, ...
         dtype_id, dspace_id, 'H5P_DEFAULT', 'H5P_DEFAULT', 'H5P_DEFAULT');
     H5T.close(dtype_id);
     H5S.close(dspace_id);
@@ -147,5 +149,5 @@ end
 % Close the dataset and the file:
 % ------------------------------------------------------------------
 H5D.close(dset_id);
-H5G.close(id_id);
+% H5G.close(id_id);
 H5F.close(file_id);

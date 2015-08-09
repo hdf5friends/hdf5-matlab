@@ -236,3 +236,13 @@ for da = 1:nDA,
         break
     end
 end
+
+% Add a digit at the end of each dataspace name, to avoid name collisions.
+dsnames = struct;
+for da = 1:numel(hdf),
+    if ~ isfield(dsnames, hdf{da}.dset_name),
+        dsnames.(hdf{da}.dset_name) = 0;
+    end
+    dsnames.(hdf{da}.dset_name) = dsnames.(hdf{da}.dset_name) + 1;
+    hdf{da}.dset_name = sprintf('%s%d', hdf{da}.dset_name, dsnames.(hdf{da}.dset_name));
+end
